@@ -1,0 +1,87 @@
+;/*++
+;
+; Copyright (c) OpenDevicePartnership.  All rights reserved.
+;
+; Module Name:
+;
+;     HIDTime.inx
+;
+; Abstract:
+;     INF file for installing the HID Time and Alarm stub driver as a
+;     root-enumerated (software-only) device.
+;
+;--*/
+
+[Version]
+Signature="$WINDOWS NT$"
+Class=System
+ClassGuid={4d36e97d-e325-11ce-bfc1-08002be10318}
+Provider=%ProviderName%
+DriverVer=08/04/2026,1.0.0.0
+CatalogFile=HIDTime.cat
+PnpLockdown=1
+
+[SourceDisksNames]
+3426=windows cd
+
+[SourceDisksFiles]
+HIDTime.sys = 3426
+
+[DestinationDirs]
+DefaultDestDir = 12
+
+[ControlFlags]
+ExcludeFromSelect = *
+
+;******************************************
+; HID Time and Alarm stub install section
+;******************************************
+
+[Manufacturer]
+%ManufacturerName%=Standard,NT$ARCH$
+
+[Standard.NT$ARCH$]
+%HIDTime.DeviceDesc% = HIDTime_Inst,Root\HIDTime
+
+[HIDTime_Inst.NT]
+CopyFiles = HIDTimeCopyFiles
+
+[HIDTimeCopyFiles]
+HIDTime.sys,,,0x100
+
+[HIDTime_Inst.NT.Services]
+AddService = HIDTime,%SPSVCINST_ASSOCSERVICE%,HIDTime_Service_Inst
+
+[HIDTime_Service_Inst]
+DisplayName    = %HIDTime.SvcDesc%
+ServiceType    = %SERVICE_KERNEL_DRIVER%
+StartType      = %SERVICE_DEMAND_START%
+ErrorControl   = %SERVICE_ERROR_NORMAL%
+ServiceBinary  = %12%\HIDTime.sys
+
+[HIDTime_Inst.NT.Wdf]
+KmdfService = HIDTime, HIDTime_wdfsect
+
+[HIDTime_wdfsect]
+KmdfLibraryVersion = 1.15
+
+[strings]
+; localizable strings
+ProviderName        = "OpenDevicePartnership"
+ManufacturerName    = "OpenDevicePartnership"
+HIDTime.DeviceDesc  = "HID Time and Alarm Stub Driver"
+HIDTime.SvcDesc     = "HID Time and Alarm Stub Driver"
+
+; non-localizable strings
+SPSVCINST_TAGTOFRONT   = 0x00000003
+SPSVCINST_ASSOCSERVICE = 0x00000002
+SERVICE_KERNEL_DRIVER  = 1
+SERVICE_BOOT_START     = 0
+SERVICE_SYSTEM_START   = 1
+SERVICE_DEMAND_START   = 3
+SERVICE_ERROR_NORMAL   = 1
+SERVICE_ERROR_IGNORE   = 0
+SERVICE_ERROR_CRITICAL = 3
+REG_EXPAND_SZ          = 0x00020000
+REG_DWORD              = 0x00010001
+REG_SZ                 = 0x00000000

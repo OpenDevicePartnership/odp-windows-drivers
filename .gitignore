@@ -8,3 +8,4 @@
 # Output folders
 drivers/qemu/QemuI2C/arm64
 drivers/qemu/pl061gpio/arm64
+drivers/hid/HIDTime/arm64
