@@ -101,13 +101,6 @@ typedef struct _ACPI_TIME_AND_ALARM_CAPABILITIES
     ACPI_TIME_RESOLUTION RealTimeResolution;
 } ACPI_TIME_AND_ALARM_CAPABILITIES, *PACPI_TIME_AND_ALARM_CAPABILITIES;
 
-//
-// Fake values. Chosen to be unmistakable so a client can tell at a glance the
-// data came from this driver rather than a zeroed buffer.
-//
-#define HIDTIME_FAKE_ALARM_VALUE_SECONDS 0x0000ABCDUL
-#define HIDTIME_FAKE_ALARM_POLICY_SECONDS 0x00001234UL
-
 DRIVER_INITIALIZE DriverEntry;
 EVT_WDF_DRIVER_DEVICE_ADD HidTimeEvtDeviceAdd;
 EVT_WDF_IO_QUEUE_IO_DEVICE_CONTROL HidTimeEvtIoDeviceControl;
@@ -160,6 +153,92 @@ _Use_decl_annotations_
     return WdfIoQueueCreate(device, &queueConfig, WDF_NO_OBJECT_ATTRIBUTES, WDF_NO_HANDLE);
 }
 
+//
+// TAD data producers. These are the real handler functions; their bodies are
+// currently stubbed with fake, obviously-recognizable data until the HID
+// transport lands.
+//
+static VOID
+HidTimeGetRealTime(PACPI_REAL_TIME Rt)
+{
+    // TODO: replace stub with real HIDClass.sys / ACPI TAD query once HID transport lands.
+    RtlZeroMemory(Rt, sizeof(*Rt));
+    Rt->Year = 2015;
+    Rt->Month = 3;
+    Rt->Day = 14;
+    Rt->Hour = 9;
+    Rt->Minute = 26;
+    Rt->Second = 53;
+    Rt->Milliseconds = 589;
+    Rt->Valid = 1;
+}
+
+static VOID
+HidTimeGetWakeAlarmValue(PWAKE_ALARM_INFORMATION Out, ULONG TimerIdentifier)
+{
+    // TODO: replace stub with real HIDClass.sys / ACPI TAD query once HID transport lands.
+    // Fake timeout chosen to be an obviously-recognizable seconds value.
+    Out->TimerIdentifier = TimerIdentifier;
+    Out->Timeout = 12345;
+}
+
+static VOID
+HidTimeGetWakeAlarmPolicy(PWAKE_ALARM_INFORMATION Out, ULONG TimerIdentifier)
+{
+    // TODO: replace stub with real HIDClass.sys / ACPI TAD query once HID transport lands.
+    // Fake timeout chosen to be an obviously-recognizable seconds value.
+    Out->TimerIdentifier = TimerIdentifier;
+    Out->Timeout = 54321;
+}
+
+static VOID
+HidTimeGetCapabilities(PACPI_TIME_AND_ALARM_CAPABILITIES Caps)
+{
+    // TODO: replace stub with real HIDClass.sys / ACPI TAD query once HID transport lands.
+    RtlZeroMemory(Caps, sizeof(*Caps));
+    Caps->AcWakeSupported = TRUE;
+    Caps->DcWakeSupported = TRUE;
+    Caps->S4AcWakeSupported = TRUE;
+    Caps->S4DcWakeSupported = TRUE;
+    Caps->S5AcWakeSupported = TRUE;
+    Caps->S5DcWakeSupported = TRUE;
+    Caps->S4S5WakeStatusSupported = TRUE;
+    Caps->DeepestWakeSystemState = PowerSystemHibernate;
+    Caps->RealTimeFeaturesSupported = TRUE;
+    Caps->RealTimeResolution = AcpiTimeResolutionSeconds;
+}
+
+static VOID
+HidTimeGetWakeAlarmPowerState(PULONG PowerState)
+{
+    // TODO: replace stub with real HIDClass.sys / ACPI TAD query once HID transport lands.
+    *PowerState = PowerSystemHibernate;
+}
+
+static NTSTATUS
+HidTimeSetWakeAlarmValue(PWAKE_ALARM_INFORMATION In)
+{
+    // TODO: real driver programs the wake timer/timeout from this input.
+    UNREFERENCED_PARAMETER(In);
+    return STATUS_SUCCESS;
+}
+
+static NTSTATUS
+HidTimeSetWakeAlarmPolicy(PWAKE_ALARM_INFORMATION In)
+{
+    // TODO: real driver configures the wake alarm policy from this input.
+    UNREFERENCED_PARAMETER(In);
+    return STATUS_SUCCESS;
+}
+
+static NTSTATUS
+HidTimeSetRealTime(PACPI_REAL_TIME In)
+{
+    // TODO: real driver writes the RTC/real time from this input.
+    UNREFERENCED_PARAMETER(In);
+    return STATUS_SUCCESS;
+}
+
 _Use_decl_annotations_
     VOID
     HidTimeEvtIoDeviceControl(
@@ -182,20 +261,15 @@ _Use_decl_annotations_
     case IOCTL_ACPI_GET_REAL_TIME:
     {
         PACPI_REAL_TIME rt;
+
         status = WdfRequestRetrieveOutputBuffer(Request, sizeof(*rt), (PVOID *)&rt, &bufLen);
         if (!NT_SUCCESS(status))
         {
             break;
         }
-        RtlZeroMemory(rt, sizeof(*rt));
-        rt->Year = 2026;
-        rt->Month = 8;
-        rt->Day = 4;
-        rt->Hour = 12;
-        rt->Minute = 34;
-        rt->Second = 56;
-        rt->Milliseconds = 789;
-        rt->Valid = 1;
+
+        HidTimeGetRealTime(rt);
+
         information = sizeof(*rt);
         break;
     }
@@ -204,17 +278,21 @@ _Use_decl_annotations_
     {
         PWAKE_ALARM_INFORMATION out;
         PWAKE_ALARM_INFORMATION in;
+        ULONG timerId = 0;
+
         status = WdfRequestRetrieveOutputBuffer(Request, sizeof(*out), (PVOID *)&out, &bufLen);
         if (!NT_SUCCESS(status))
         {
             break;
         }
-        out->TimerIdentifier = 0;
+
         if (NT_SUCCESS(WdfRequestRetrieveInputBuffer(Request, sizeof(*in), (PVOID *)&in, &bufLen)))
         {
-            out->TimerIdentifier = in->TimerIdentifier;
+            timerId = in->TimerIdentifier;
         }
-        out->Timeout = HIDTIME_FAKE_ALARM_VALUE_SECONDS;
+
+        HidTimeGetWakeAlarmValue(out, timerId);
+
         information = sizeof(*out);
         break;
     }
@@ -223,17 +301,21 @@ _Use_decl_annotations_
     {
         PWAKE_ALARM_INFORMATION out;
         PWAKE_ALARM_INFORMATION in;
+        ULONG timerId = 0;
+
         status = WdfRequestRetrieveOutputBuffer(Request, sizeof(*out), (PVOID *)&out, &bufLen);
         if (!NT_SUCCESS(status))
         {
             break;
         }
-        out->TimerIdentifier = 0;
+
         if (NT_SUCCESS(WdfRequestRetrieveInputBuffer(Request, sizeof(*in), (PVOID *)&in, &bufLen)))
         {
-            out->TimerIdentifier = in->TimerIdentifier;
+            timerId = in->TimerIdentifier;
         }
-        out->Timeout = HIDTIME_FAKE_ALARM_POLICY_SECONDS;
+
+        HidTimeGetWakeAlarmPolicy(out, timerId);
+
         information = sizeof(*out);
         break;
     }
@@ -241,22 +323,15 @@ _Use_decl_annotations_
     case IOCTL_GET_ACPI_TIME_AND_ALARM_CAPABILITIES:
     {
         PACPI_TIME_AND_ALARM_CAPABILITIES caps;
+
         status = WdfRequestRetrieveOutputBuffer(Request, sizeof(*caps), (PVOID *)&caps, &bufLen);
         if (!NT_SUCCESS(status))
         {
             break;
         }
-        RtlZeroMemory(caps, sizeof(*caps));
-        caps->AcWakeSupported = TRUE;
-        caps->DcWakeSupported = TRUE;
-        caps->S4AcWakeSupported = TRUE;
-        caps->S4DcWakeSupported = TRUE;
-        caps->S5AcWakeSupported = TRUE;
-        caps->S5DcWakeSupported = TRUE;
-        caps->S4S5WakeStatusSupported = TRUE;
-        caps->DeepestWakeSystemState = PowerSystemHibernate;
-        caps->RealTimeFeaturesSupported = TRUE;
-        caps->RealTimeResolution = AcpiTimeResolutionSeconds;
+
+        HidTimeGetCapabilities(caps);
+
         information = sizeof(*caps);
         break;
     }
@@ -264,23 +339,66 @@ _Use_decl_annotations_
     case IOCTL_GET_WAKE_ALARM_SYSTEM_POWERSTATE:
     {
         PULONG powerState;
+
         status = WdfRequestRetrieveOutputBuffer(Request, sizeof(*powerState), (PVOID *)&powerState, &bufLen);
         if (!NT_SUCCESS(status))
         {
             break;
         }
-        *powerState = PowerSystemHibernate;
+
+        HidTimeGetWakeAlarmPowerState(powerState);
+
         information = sizeof(*powerState);
         break;
     }
 
     case IOCTL_SET_WAKE_ALARM_VALUE:
-    case IOCTL_SET_WAKE_ALARM_POLICY:
-    case IOCTL_ACPI_SET_REAL_TIME:
-        // Stub: accept the write and discard it.
-        status = STATUS_SUCCESS;
+    {
+        PWAKE_ALARM_INFORMATION in;
+
+        status = WdfRequestRetrieveInputBuffer(Request, sizeof(*in), (PVOID *)&in, &bufLen);
+        if (!NT_SUCCESS(status))
+        {
+            break;
+        }
+
+        status = HidTimeSetWakeAlarmValue(in);
+
         information = 0;
         break;
+    }
+
+    case IOCTL_SET_WAKE_ALARM_POLICY:
+    {
+        PWAKE_ALARM_INFORMATION in;
+
+        status = WdfRequestRetrieveInputBuffer(Request, sizeof(*in), (PVOID *)&in, &bufLen);
+        if (!NT_SUCCESS(status))
+        {
+            break;
+        }
+
+        status = HidTimeSetWakeAlarmPolicy(in);
+
+        information = 0;
+        break;
+    }
+
+    case IOCTL_ACPI_SET_REAL_TIME:
+    {
+        PACPI_REAL_TIME in;
+
+        status = WdfRequestRetrieveInputBuffer(Request, sizeof(*in), (PVOID *)&in, &bufLen);
+        if (!NT_SUCCESS(status))
+        {
+            break;
+        }
+
+        status = HidTimeSetRealTime(in);
+
+        information = 0;
+        break;
+    }
 
     default:
         status = STATUS_INVALID_DEVICE_REQUEST;
