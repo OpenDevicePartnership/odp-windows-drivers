@@ -7,8 +7,7 @@
 ;     HIDTime.inx
 ;
 ; Abstract:
-;     INF file for installing the HID Time and Alarm stub driver as a
-;     root-enumerated (software-only) device.
+;     INF file for installing the HID Time and Alarm driver
 ;
 ;--*/
 
@@ -41,13 +40,35 @@ ExcludeFromSelect = *
 %ManufacturerName%=Standard,NT$ARCH$
 
 [Standard.NT$ARCH$]
-%HIDTime.DeviceDesc% = HIDTime_Inst,Root\HIDTime
+%HIDTime.DeviceDesc% = HIDTime_Inst,HID_DEVICE_UP:0001_U:0014
+; Format is https://learn.microsoft.com/en-us/windows-hardware/drivers/hid/hidclass-hardware-ids-for-top-level-collections
+; HID_DEVICE_UP:XXXX_U:YYYY where XXXX is the usage page number for the TLC and YYYY is the usage number for the TLC.
+; TODO per docs, this format is "reserved for windows INFs" so if we intend to actually ship this before inboxing it,
+;      we'll need to use a different format until we get this upstreamed.
+;      Apparently there was an oversight when initial formats were defined where there's no hardware ID that has all
+;      of (VID, PID, Usage Page, Usage) by default - best you can get is (VID, Usage Page, Usage) which means you only
+;      get one 'device' per VID, which is not enough to support multiple devices from the same vendor.
+;
+;      You can override this behavior with a regkey, but that requires another driver for installing the override and that
+;      driver needs to match on the VEN/DEV/SUBSYS from ACPI (i.e. not the VID/PID the device describes itself as in its
+;      HID descriptor), which is not ideal.  It's unclear if it's worth it to create such a driver to get around this limitation
+;      if we intend to inbox it in windows anyway, since inbox drivers can just match on (Usage page, Usage) and don't need to
+;      worry about VID/PID at all.  For now, we'll just use the Usage/Usage Page format, but if we do determine that we need
+;      to ship something before standardization/inboxing, we'll need to change this and figure out how to do that stub driver
+;      to set the regkey.
 
 [HIDTime_Inst.NT]
 CopyFiles = HIDTimeCopyFiles
 
+[HIDTime_Inst.NT.HW]
+AddReg = HIDTime_Security
+
 [HIDTimeCopyFiles]
 HIDTime.sys,,,0x100
+
+[HIDTime_Security]
+HKR,,DeviceCharacteristics,0x10001,0x0100 ; FILE_DEVICE_SECURE_OPEN
+HKR,,Security,,"D:P(A;;GA;;;SY)(A;;GA;;;BA)"
 
 [HIDTime_Inst.NT.Services]
 AddService = HIDTime,%SPSVCINST_ASSOCSERVICE%,HIDTime_Service_Inst
@@ -69,8 +90,8 @@ KmdfLibraryVersion = 1.15
 ; localizable strings
 ProviderName        = "OpenDevicePartnership"
 ManufacturerName    = "OpenDevicePartnership"
-HIDTime.DeviceDesc  = "HID Time and Alarm Stub Driver"
-HIDTime.SvcDesc     = "HID Time and Alarm Stub Driver"
+HIDTime.DeviceDesc  = "HID Time and Alarm Driver"
+HIDTime.SvcDesc     = "HID Time and Alarm Driver"
 
 ; non-localizable strings
 SPSVCINST_TAGTOFRONT   = 0x00000003

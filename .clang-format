@@ -1,0 +1,20 @@
+BasedOnStyle: Microsoft
+ColumnLimit: 132
+BreakAfterAttributes: Always
+BreakAfterReturnType: All
+BinPackArguments: false
+BinPackParameters: OnePerLine
+BinPackLongBracedList: false
+AttributeMacros:
+  - _Use_decl_annotations_
+  - _Must_inspect_result_
+  - _Check_return_
+  - _IRQL_requires_
+  - _IRQL_requires_max_
+  - _IRQL_requires_min_
+  - _IRQL_requires_same_
+  - _IRQL_raises_
+  - _IRQL_saves_
+  - _IRQL_restores_
+  - _Acquires_lock_
+  - _Releases_lock_
