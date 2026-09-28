@@ -540,6 +540,16 @@ VOID ECTestEvtIoDeviceControl(
 
     switch (IoControlCode)
     {
+#ifdef EC_TEST_NATIVE_PCC
+    case IOCTL_ECTEST_PCC_PROBE:
+    case IOCTL_ECTEST_PCC_EXECUTE:
+        status = WdfRequestForwardToIoQueue(Request, DeviceContextGet(device)->PccQueue);
+        if (NT_SUCCESS(status))
+        {
+            completeRequest = FALSE;
+        }
+        break;
+#endif
     case IOCTL_ACPI_EVAL_METHOD_EX:
         Trace(TRACE_LEVEL_INFORMATION, TRACE_QUEUE, "IOCTL_ACPI_EVAL_METHOD_EX\n");
 
