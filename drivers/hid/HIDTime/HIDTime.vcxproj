@@ -88,6 +88,10 @@
     <ItemGroup>
         <ClInclude Exclude="@(ClInclude)" Include="*.h;*.hpp;*.hxx;*.hm;*.inl;*.xsd" />
     </ItemGroup>
+    <PropertyGroup>
+        <!-- VS 17.x's legacy NuGet targets resolve assets by target framework, which native projects lack. -->
+        <ResolveNuGetPackages>false</ResolveNuGetPackages>
+    </PropertyGroup>
     <ItemGroup>
         <PackageReference Include="Microsoft.Windows.ImplementationLibrary" Version="1.0.260126.7" />
     </ItemGroup>
