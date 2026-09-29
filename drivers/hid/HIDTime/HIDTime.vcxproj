@@ -89,7 +89,10 @@
         <ClInclude Exclude="@(ClInclude)" Include="*.h;*.hpp;*.hxx;*.hm;*.inl;*.xsd" />
     </ItemGroup>
     <PropertyGroup>
-        <!-- VS 17.x's legacy NuGet targets resolve assets by target framework, which native projects lack. -->
+        <!--
+            MSBuild 17.x's legacy NuGet targets resolve assets by target framework, which native projects lack.
+            We should be able to get rid of this when we migrate to 18.x
+        -->
         <ResolveNuGetPackages>false</ResolveNuGetPackages>
     </PropertyGroup>
     <ItemGroup>
