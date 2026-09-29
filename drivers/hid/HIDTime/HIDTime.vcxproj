@@ -88,12 +88,8 @@
     <ItemGroup>
         <ClInclude Exclude="@(ClInclude)" Include="*.h;*.hpp;*.hxx;*.hm;*.inl;*.xsd" />
     </ItemGroup>
+    <ItemGroup>
+        <PackageReference Include="Microsoft.Windows.ImplementationLibrary" Version="1.0.260126.7" />
+    </ItemGroup>
     <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
-    <PropertyGroup>
-        <WilPropsFilePath>$(ProjectDir)packages\Microsoft.Windows.ImplementationLibrary.1.0.260126.7\build\native\Microsoft.Windows.ImplementationLibrary.targets</WilPropsFilePath>
-    </PropertyGroup>
-    <Import Project="$(WilPropsFilePath)" Condition="Exists('$(WilPropsFilePath)')" />
-    <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
-        <Error Condition="!Exists('$(WilPropsFilePath)')" Text="Restore NuGet packages before building. Missing Microsoft.Windows.ImplementationLibrary 1.0.260126.7." />
-    </Target>
 </Project>
