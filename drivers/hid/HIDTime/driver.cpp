@@ -31,5 +31,10 @@ DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING RegistryPath)
     WDF_DRIVER_CONFIG_INIT(&config, &DeviceContext::create);
     TraceLoggingRegister(g_hTraceProvider);
 
-    return WdfDriverCreate(DriverObject, RegistryPath, &attributes, &config, WDF_NO_HANDLE);
+    const NTSTATUS status = WdfDriverCreate(DriverObject, RegistryPath, &attributes, &config, WDF_NO_HANDLE);
+    if (!NT_SUCCESS(status))
+    {
+        TraceLoggingUnregister(g_hTraceProvider);
+    }
+    return status;
 }

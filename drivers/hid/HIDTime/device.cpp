@@ -1,10 +1,10 @@
 /*++
 
-Copyright (c) OpenDevicePartnership.  All rights reserved.
+Copyright (c) OpenDevicePartnership and Contributors.  All rights reserved.
 
 Module Name:
 
-    HIDTime.cpp
+    device.cpp
 
 Abstract:
 
@@ -26,7 +26,7 @@ namespace
 {
 constexpr ULONG pool_tag = 'TdiH';
 
-// The fields a device has to carry in both of its time reports for the TAD contract to be servicable. Milliseconds are
+// The fields a device has to carry in both of its time reports for the TAD contract to be serviceable. Milliseconds are
 // deliberately absent: they are optional, and load_tad_capabilities reports whichever resolution the device offers.
 constexpr USAGE required_time_value_usages[] = {
     hid_constants::time_and_date::usage::year,
@@ -67,8 +67,9 @@ constexpr LONGLONG hid_operation_timeout = WDF_REL_TIMEOUT_IN_SEC_CONSTEXPR(5);
 // descriptor.
 //
 // HidP_InitializeReportForID is supposed to default-construct a report to all nulls (or 0s for fields that aren't
-// listed as nullable in the report descriptor), but due to a bug in , we can't construct
-// 'blank' output reports.  Therefore, we need to compute a null value ourselves if we need to use it.
+// listed as nullable in the report descriptor), but it has a bug that makes it not work correctly on output reports
+// on devices that also have input reports, so we can't use it to construct 'blank' output reports.  Therefore, we
+// need to compute a null value ourselves.
 //
 // TODO when HidP_InitializeReportForIdEx is made available, switch to just using it to default things to null and
 //      get rid of this function.
@@ -674,6 +675,7 @@ DeviceContext::verify_time_report(HIDP_REPORT_TYPE report_type, UINT8 report_id)
 NTSTATUS
 DeviceContext::load_wake_timer_field(USAGE usage, WakeTimerFieldInfo *field)
 {
+    *field = {};
     field->usage = usage;
 
     USHORT input_caps_count = 1;
@@ -1353,18 +1355,32 @@ DeviceContext::load_tad_capabilities()
     m_tad_capabilities.RealTimeFeaturesSupported = TRUE;
 
     {
-        HIDP_VALUE_CAPS value_caps{};
-        USHORT value_caps_count = 1;
-        m_tad_capabilities.RealTimeResolution =
-            NT_SUCCESS(HidP_GetSpecificValueCaps(HidP_Input,
-                                                 hid_constants::time_and_date::usage_page,
-                                                 HIDP_LINK_COLLECTION_UNSPECIFIED,
-                                                 hid_constants::time_and_date::usage::millisecond,
-                                                 &value_caps,
-                                                 &value_caps_count,
-                                                 m_preparsed_data))
-                ? AcpiTimeResolutionMilliseconds
-                : AcpiTimeResolutionSeconds;
+        const struct
+        {
+            HIDP_REPORT_TYPE report_type;
+            UINT8 report_id;
+        } time_reports[] = {
+            {HidP_Input, m_report_ids.get_time_report_id},
+            {HidP_Output, m_report_ids.set_time_report_id},
+        };
+
+        bool ms_supported = true;
+        for (const auto &time_report : time_reports)
+        {
+            HIDP_VALUE_CAPS value_caps{};
+            USHORT value_caps_count = 1;
+            ms_supported = ms_supported &&
+                           NT_SUCCESS(HidP_GetSpecificValueCaps(time_report.report_type,
+                                                                hid_constants::time_and_date::usage_page,
+                                                                HIDP_LINK_COLLECTION_UNSPECIFIED,
+                                                                hid_constants::time_and_date::usage::millisecond,
+                                                                &value_caps,
+                                                                &value_caps_count,
+                                                                m_preparsed_data)) &&
+                           time_report.report_id == value_caps.ReportID;
+        }
+
+        m_tad_capabilities.RealTimeResolution = ms_supported ? AcpiTimeResolutionMilliseconds : AcpiTimeResolutionSeconds;
     }
 
     m_tad_capabilities.AcWakeSupported = m_ac_wake_timer.present;

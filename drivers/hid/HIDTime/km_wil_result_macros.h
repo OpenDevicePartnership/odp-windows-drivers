@@ -1,6 +1,6 @@
 /*++
 
-    Copyright (c) OpenDevicePartnership. All rights Reserved
+    Copyright (c) OpenDevicePartnership and Contributors. All rights Reserved
 
 Module Name:
 
