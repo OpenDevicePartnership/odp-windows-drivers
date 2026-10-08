@@ -81,7 +81,7 @@ jobs:
         run: |
           $project = '${{ matrix.driver.project }}'
           Write-Host "Restoring $project"
-          nuget restore $project -ConfigFile $env:APPDATA\NuGet\NuGet.Config
+          msbuild $project /t:Restore /p:Configuration=Release /p:Platform=${{ matrix.platform }}
 
       - name: Build Driver Project
         shell: pwsh
