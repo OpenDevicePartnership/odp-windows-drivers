@@ -67,9 +67,11 @@ static VOID
 QemuI2cPostCommand(
     _In_ PPBC_DEVICE pDevice,
     _In_ ULONG Command,
-    _In_ UCHAR Data)
+    _In_ UCHAR Data,
+    _In_ BOOLEAN More = FALSE)
 {
-    pDevice->pRegisters->Data.Write(QEMU_I2C_MAKE_DATA(Command, Data));
+    pDevice->pRegisters->Data.Write(
+        QEMU_I2C_MAKE_DATA(Command, Data) | (More ? QEMU_I2C_DATA_RX_MORE : 0));
 }
 
 //
@@ -557,7 +559,8 @@ ControllerStartRxBurst(
                       : (ULONG)remaining;
 
     pRequest->Phase = TransferPhaseRx;
-    QemuI2cPostCommand(pDevice, QEMU_I2C_CMD_RX, (UCHAR)(chunk - 1));
+    QemuI2cPostCommand(
+        pDevice, QEMU_I2C_CMD_RX, (UCHAR)(chunk - 1), remaining > chunk);
 }
 
 VOID ControllerProcessInterrupts(
@@ -588,15 +591,12 @@ VOID ControllerProcessInterrupts(
     FuncEntry(TRACE_FLAG_TRANSFER);
 
     PPBC_TARGET pTarget;
-    UCHAR address7Bit;
 
     NT_ASSERT(pDevice != NULL);
     NT_ASSERT(pRequest != NULL);
 
     pTarget = pDevice->pCurrentTarget;
     NT_ASSERT(pTarget != NULL);
-
-    address7Bit = (UCHAR)(pTarget->Settings.Address & 0x7F);
 
     //
     // A protocol error indicates illegal command ordering and is fatal.
@@ -720,16 +720,7 @@ VOID ControllerProcessInterrupts(
 
         if (pRequest->Information < pRequest->Length)
         {
-            //
-            // More to read: the controller requires a repeated START
-            // before the next RX burst.
-            //
-
-            pRequest->Phase = TransferPhaseRxRestart;
-            QemuI2cPostCommand(
-                pDevice,
-                QEMU_I2C_CMD_START,
-                (UCHAR)((address7Bit << 1) | 0x01));
+            ControllerStartRxBurst(pDevice, pRequest);
         }
         else
         {
@@ -738,17 +729,6 @@ VOID ControllerProcessInterrupts(
 
         break;
     }
-
-    case TransferPhaseRxRestart:
-
-        if (TestAnyBits(InterruptStatus, QEMU_I2C_STATUS_NAK))
-        {
-            ControllerAbortTransfer(pDevice, pRequest, STATUS_NO_SUCH_DEVICE);
-            goto exit;
-        }
-
-        ControllerStartRxBurst(pDevice, pRequest);
-        break;
 
     case TransferPhaseStop:
 
