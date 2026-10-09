@@ -133,7 +133,6 @@ typedef enum TRANSFER_PHASE
     TransferPhaseAddress,   // (repeated) START posted, waiting CMD_DONE
     TransferPhaseTx,        // TX byte posted, waiting CMD_DONE
     TransferPhaseRx,        // RX burst posted, waiting CMD_DONE then drain
-    TransferPhaseRxRestart, // repeated START posted before the next RX burst
     TransferPhaseStop,      // STOP posted, waiting CMD_DONE
 } TRANSFER_PHASE;
 

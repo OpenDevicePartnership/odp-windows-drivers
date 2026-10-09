@@ -78,6 +78,7 @@ typedef struct QEMUI2C_REGISTERS
 #define QEMU_I2C_DATA_DATA_MASK 0xFFu
 #define QEMU_I2C_DATA_CMD_SHIFT 8
 #define QEMU_I2C_DATA_CMD_MASK 0x3u
+#define QEMU_I2C_DATA_RX_MORE (1u << 10)
 
 #define QEMU_I2C_CMD_START 0x0u // data = (addr7 << 1) | rwbit
 #define QEMU_I2C_CMD_STOP 0x1u
