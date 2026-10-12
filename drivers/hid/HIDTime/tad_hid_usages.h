@@ -14,6 +14,7 @@ inline constexpr USAGE real_time_clock = 0x14;
 inline constexpr USAGE timer_expiration_external_power = 0xF0;
 inline constexpr USAGE timer_expiration_internal_power = 0xF1;
 inline constexpr USAGE power_source_change_minimum_expiration = 0xF2;
+inline constexpr USAGE lowest_system_wakeable_power_state = 0xF3;
 inline constexpr USAGE s1 = 0xF4;
 inline constexpr USAGE s5 = 0xF8;
 } // namespace usage

@@ -9,7 +9,6 @@
 #include "device.h"
 
 extern "C" DRIVER_INITIALIZE DriverEntry;
-EVT_WDF_DRIVER_DEVICE_ADD HidTimeEvtDeviceAdd;
 EVT_WDF_OBJECT_CONTEXT_CLEANUP HidTimeEvtDriverContextCleanup;
 
 _Use_decl_annotations_ VOID
