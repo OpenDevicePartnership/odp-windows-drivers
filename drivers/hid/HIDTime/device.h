@@ -98,6 +98,10 @@ class DeviceContext final
     const WakeTimerFieldInfo &
     wake_timer_for_identifier(ULONG timer_identifier) const;
 
+    // Finds the report ID and logical collection ID for the 'deepest wakeable state' field advertised by the device
+    NTSTATUS
+    find_deepest_wake_state_collection(UINT8 *report_id, USHORT *link_collection);
+
     NTSTATUS
     get_wake_alarm_value(ULONG timer_identifier, WAKE_ALARM_INFORMATION *out);
 
@@ -109,9 +113,6 @@ class DeviceContext final
 
     NTSTATUS
     set_wake_alarm_policy(const WAKE_ALARM_INFORMATION *in);
-
-    NTSTATUS
-    find_sleep_state_caps(HIDP_BUTTON_CAPS *caps);
 
     NTSTATUS
     load_tad_capabilities();

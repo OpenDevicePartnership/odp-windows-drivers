@@ -20,6 +20,7 @@ Environment:
 #include "device.h"
 
 #include "Trace.h"
+#include "kspan.h"
 #include "tad_hid_usages.h"
 
 namespace
@@ -52,6 +53,17 @@ constexpr ULONG wake_alarm_timeout_disabled = 0xFFFFFFFF;
 // The ranges poclass.h documents for ACPI_REAL_TIME
 constexpr LONG acpi_time_zone_min = -1440;
 constexpr LONG acpi_time_zone_max = 1440;
+
+constexpr ULONG acpi_year_min = 1900;
+constexpr ULONG acpi_year_max = 9999;
+constexpr ULONG acpi_month_min = 1;
+constexpr ULONG acpi_month_max = 12;
+constexpr ULONG acpi_day_min = 1;
+constexpr ULONG acpi_day_max = 31;
+constexpr ULONG acpi_hour_max = 23;
+constexpr ULONG acpi_minute_max = 59;
+constexpr ULONG acpi_second_max = 59;
+constexpr ULONG acpi_millisecond_max = 999;
 
 // Identical to implementation of WDF_REL_TIMEOUT_IN_SEC in wdfcore.h, but constexpr so we can use it for constant init
 constexpr LONGLONG
@@ -146,9 +158,9 @@ HidPExt_GetButtonValue(_In_ HIDP_REPORT_TYPE ReportType,
     NT_RETURN_IF_NTSTATUS_FAILED(
         HidP_GetUsages(ReportType, UsagePage, LinkCollection, usages, &usage_count, PreparsedData, Report, ReportLength));
 
-    for (ULONG i = 0; i < usage_count; ++i)
+    for (const USAGE set_usage : kspan(usages, usage_count))
     {
-        if (usages[i] == Usage)
+        if (set_usage == Usage)
         {
             *Value = TRUE;
             break;
@@ -531,6 +543,10 @@ DeviceContext::on_surprise_removal(WDFDEVICE device)
     DeviceContext *context = GetDeviceContext(device);
 
     auto lock = context->m_device_lock.acquire();
+
+    context->m_hardware_ready = false;
+    context->m_preparsed_data = nullptr;
+    context->m_preparsed_memory.reset();
     context->close_collection_file();
 }
 
@@ -742,6 +758,51 @@ DeviceContext::wake_timer_for_identifier(ULONG timer_identifier) const
 }
 
 NTSTATUS
+DeviceContext::find_deepest_wake_state_collection(UINT8 *report_id, USHORT *link_collection)
+{
+    if (!m_hardware_ready)
+    {
+        NT_RETURN_NTSTATUS(STATUS_DEVICE_NOT_READY);
+    }
+
+    USHORT caps_count = m_hid_capabilities.NumberFeatureButtonCaps;
+    if (caps_count == 0)
+    {
+        NT_RETURN_NTSTATUS(HIDP_STATUS_USAGE_NOT_FOUND);
+    }
+
+    wil::unique_wdf_memory caps_memory;
+    HIDP_BUTTON_CAPS *caps{};
+    NT_RETURN_IF_NTSTATUS_FAILED(WdfMemoryCreate(WDF_NO_OBJECT_ATTRIBUTES,
+                                                 NonPagedPoolNx,
+                                                 pool_tag,
+                                                 caps_count * sizeof(HIDP_BUTTON_CAPS),
+                                                 caps_memory.put(),
+                                                 reinterpret_cast<void **>(&caps)));
+
+    NT_RETURN_IF_NTSTATUS_FAILED(HidP_GetSpecificButtonCaps(HidP_Feature,
+                                                            hid_constants::generic_desktop::usage_page,
+                                                            HIDP_LINK_COLLECTION_UNSPECIFIED,
+                                                            0,
+                                                            caps,
+                                                            &caps_count,
+                                                            m_preparsed_data));
+
+    for (const auto &cap : kspan(caps, caps_count))
+    {
+        if (cap.LinkUsagePage == hid_constants::generic_desktop::usage_page &&
+            cap.LinkUsage == hid_constants::generic_desktop::usage::lowest_system_wakeable_power_state)
+        {
+            *report_id = cap.ReportID;
+            *link_collection = cap.LinkCollection;
+            return STATUS_SUCCESS;
+        }
+    }
+
+    NT_RETURN_NTSTATUS(HIDP_STATUS_USAGE_NOT_FOUND);
+}
+
+NTSTATUS
 DeviceContext::open_collection_file()
 {
     wil::unique_wdf_memory name_memory;
@@ -936,18 +997,37 @@ DeviceContext::get_time(ACPI_REAL_TIME *out)
 
     RtlZeroMemory(out, sizeof(*out));
 
-    // ACPI_REAL_TIME's fields are all different widths, so each one needs its own narrowing store.
     const struct
     {
         USAGE usage;
+        ULONG min;
+        ULONG max;
         void (*assign)(ACPI_REAL_TIME *, ULONG);
     } value_fields[] = {
-        {hid_constants::time_and_date::usage::year, [](ACPI_REAL_TIME *t, ULONG v) { t->Year = static_cast<USHORT>(v); }},
-        {hid_constants::time_and_date::usage::month, [](ACPI_REAL_TIME *t, ULONG v) { t->Month = static_cast<UCHAR>(v); }},
-        {hid_constants::time_and_date::usage::day, [](ACPI_REAL_TIME *t, ULONG v) { t->Day = static_cast<UCHAR>(v); }},
-        {hid_constants::time_and_date::usage::hour, [](ACPI_REAL_TIME *t, ULONG v) { t->Hour = static_cast<UCHAR>(v); }},
-        {hid_constants::time_and_date::usage::minute, [](ACPI_REAL_TIME *t, ULONG v) { t->Minute = static_cast<UCHAR>(v); }},
-        {hid_constants::time_and_date::usage::second, [](ACPI_REAL_TIME *t, ULONG v) { t->Second = static_cast<UCHAR>(v); }},
+        {hid_constants::time_and_date::usage::year,
+         acpi_year_min,
+         acpi_year_max,
+         [](ACPI_REAL_TIME *t, ULONG v) { t->Year = static_cast<USHORT>(v); }},
+        {hid_constants::time_and_date::usage::month,
+         acpi_month_min,
+         acpi_month_max,
+         [](ACPI_REAL_TIME *t, ULONG v) { t->Month = static_cast<UCHAR>(v); }},
+        {hid_constants::time_and_date::usage::day,
+         acpi_day_min,
+         acpi_day_max,
+         [](ACPI_REAL_TIME *t, ULONG v) { t->Day = static_cast<UCHAR>(v); }},
+        {hid_constants::time_and_date::usage::hour,
+         0,
+         acpi_hour_max,
+         [](ACPI_REAL_TIME *t, ULONG v) { t->Hour = static_cast<UCHAR>(v); }},
+        {hid_constants::time_and_date::usage::minute,
+         0,
+         acpi_minute_max,
+         [](ACPI_REAL_TIME *t, ULONG v) { t->Minute = static_cast<UCHAR>(v); }},
+        {hid_constants::time_and_date::usage::second,
+         0,
+         acpi_second_max,
+         [](ACPI_REAL_TIME *t, ULONG v) { t->Second = static_cast<UCHAR>(v); }},
     };
 
     for (const auto &field : value_fields)
@@ -961,6 +1041,12 @@ DeviceContext::get_time(ACPI_REAL_TIME *out)
                                                         m_preparsed_data,
                                                         report,
                                                         report_length));
+
+        if ((value < field.min) || (value > field.max))
+        {
+            NT_RETURN_NTSTATUS(STATUS_DEVICE_DATA_ERROR);
+        }
+
         field.assign(out, value);
     }
 
@@ -975,6 +1061,11 @@ DeviceContext::get_time(ACPI_REAL_TIME *out)
                                       report,
                                       report_length)))
     {
+        if (milliseconds > acpi_millisecond_max)
+        {
+            NT_RETURN_NTSTATUS(STATUS_DEVICE_DATA_ERROR);
+        }
+
         out->Milliseconds = static_cast<USHORT>(milliseconds);
     }
 
@@ -1402,15 +1493,9 @@ DeviceContext::load_tad_capabilities()
     // Only a device that can wake has a deepest wake state to report, so the rest costs a feature report.
     if (m_tad_capabilities.AcWakeSupported || m_tad_capabilities.DcWakeSupported)
     {
-        HIDP_BUTTON_CAPS wake_state_caps{};
-        USHORT wake_state_caps_count = 1;
-        NT_RETURN_IF_NTSTATUS_FAILED(HidP_GetSpecificButtonCaps(HidP_Feature,
-                                                                hid_constants::generic_desktop::usage_page,
-                                                                HIDP_LINK_COLLECTION_UNSPECIFIED,
-                                                                0,
-                                                                &wake_state_caps,
-                                                                &wake_state_caps_count,
-                                                                m_preparsed_data));
+        UINT8 wake_state_report_id = 0;
+        USHORT wake_state_link_collection = 0;
+        NT_RETURN_IF_NTSTATUS_FAILED(find_deepest_wake_state_collection(&wake_state_report_id, &wake_state_link_collection));
 
         const ULONG report_length = m_hid_capabilities.FeatureReportByteLength;
         wil::unique_wdf_memory report_memory;
@@ -1423,28 +1508,28 @@ DeviceContext::load_tad_capabilities()
                                                      reinterpret_cast<void **>(&report)));
         RtlZeroMemory(report, report_length);
 
-        NT_RETURN_IF_NTSTATUS_FAILED(request_report(ReadReportType::Feature, wake_state_caps.ReportID, report_memory.get()));
+        NT_RETURN_IF_NTSTATUS_FAILED(request_report(ReadReportType::Feature, wake_state_report_id, report_memory.get()));
 
-        USAGE selector{};
-        ULONG selector_count = 1;
+        USAGE wake_state_usage = 0;
+        ULONG wake_state_usage_count = 1;
         NT_RETURN_IF_NTSTATUS_FAILED(HidP_GetUsages(HidP_Feature,
                                                     hid_constants::generic_desktop::usage_page,
-                                                    HIDP_LINK_COLLECTION_UNSPECIFIED,
-                                                    &selector,
-                                                    &selector_count,
+                                                    wake_state_link_collection,
+                                                    &wake_state_usage,
+                                                    &wake_state_usage_count,
                                                     m_preparsed_data,
                                                     report,
                                                     report_length));
 
-        if ((selector_count != 1) || (selector < hid_constants::generic_desktop::usage::s1) ||
-            (selector > hid_constants::generic_desktop::usage::s5))
+        if ((wake_state_usage_count != 1) || (wake_state_usage < hid_constants::generic_desktop::usage::s1) ||
+            (wake_state_usage > hid_constants::generic_desktop::usage::s5))
         {
             NT_RETURN_NTSTATUS(STATUS_DEVICE_DATA_ERROR);
         }
 
         // S1 through S5 are contiguous in both the usage page and SYSTEM_POWER_STATE.
         const auto deepest_state =
-            static_cast<SYSTEM_POWER_STATE>(PowerSystemSleeping1 + (selector - hid_constants::generic_desktop::usage::s1));
+            static_cast<SYSTEM_POWER_STATE>(PowerSystemSleeping1 + (wake_state_usage - hid_constants::generic_desktop::usage::s1));
 
         m_tad_capabilities.DeepestWakeSystemState = deepest_state;
 
