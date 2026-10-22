@@ -45,6 +45,13 @@ Return Value:
 
     PAGED_CODE();
 
+#ifdef EC_TEST_NATIVE_PCC
+    WDF_PNPPOWER_EVENT_CALLBACKS pnpCallbacks;
+    WDF_PNPPOWER_EVENT_CALLBACKS_INIT(&pnpCallbacks);
+    pnpCallbacks.EvtDeviceReleaseHardware = ECTestPccReleaseHardware;
+    WdfDeviceInitSetPnpPowerEventCallbacks(DeviceInit, &pnpCallbacks);
+#endif
+
     WDF_OBJECT_ATTRIBUTES_INIT_CONTEXT_TYPE(&deviceAttributes, DEVICE_CONTEXT);
     status = WdfDeviceCreate(&DeviceInit, &deviceAttributes, &device);
 
@@ -88,6 +95,12 @@ Return Value:
                 // Initialize the I/O Package and any Queues
                 //
                 status = ECTestQueueInitialize(device);
+
+#ifdef EC_TEST_NATIVE_PCC
+                if (NT_SUCCESS(status)) {
+                    status = ECTestPccQueueInitialize(device);
+                }
+#endif
 
 #if defined(EC_TEST_NOTIFICATIONS) && defined(ENABLE_NOTIFICATION_SIMULATION)
                 WDF_OBJECT_ATTRIBUTES timerAttributes;

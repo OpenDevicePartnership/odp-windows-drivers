@@ -9,6 +9,10 @@ Abstract:
 
 #include "public.h"
 
+#ifdef EC_TEST_NATIVE_PCC
+#include "pcc.h"
+#endif
+
 #define EC_TEST_NOTIFICATIONS  // Enable notification support
 //#define ENABLE_NOTIFICATION_SIMULATION // Enable notification simulation
 
@@ -19,6 +23,14 @@ Abstract:
 typedef struct _DEVICE_CONTEXT
 {
     WDFREQUEST PendingRequest; // Pending request for notification
+#ifdef EC_TEST_NATIVE_PCC
+    WDFQUEUE PccQueue;
+    ECTEST_PCC_NATIVE_INTERFACE PccInterface;
+    NTSTATUS PccQueryStatus;
+    ULONG PccAcpiTimeStamp;
+    ULONG PccAcpiImageSize;
+    BOOLEAN PccQueried;
+#endif
 #ifdef EC_TEST_NOTIFICATIONS
     WDFWAITLOCK  NotificationLock; // lock for notification
 #endif

@@ -75,6 +75,9 @@
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" />
   </ImportGroup>
+  <PropertyGroup Condition="'$(EnableNativePcc)' == '' and '$(Platform)' == 'ARM64'">
+    <EnableNativePcc>true</EnableNativePcc>
+  </PropertyGroup>
   <ItemGroup Label="WrappedTaskItems" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <TargetName>ectest</TargetName>
@@ -124,7 +127,16 @@
       <FileDigestAlgorithm>sha256</FileDigestAlgorithm>
     </DriverSign>
   </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(EnableNativePcc)'=='true'">
+    <ClCompile>
+      <PreprocessorDefinitions>EC_TEST_NATIVE_PCC;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <Link>
+      <AdditionalDependencies>Aux_Klib.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="pcc.c" Condition="'$(EnableNativePcc)'=='true'" />
     <ClCompile Include="device.c">
         <WppEnabled>true</WppEnabled>
         <WppScanConfigurationData>trace.h</WppScanConfigurationData>
